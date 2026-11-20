@@ -1,36 +1,34 @@
 # KSML Compiler
 
-A compiler for the KSML language (also known as Kirino Shader Metal Language).
+A compiler for the KSML language (also known as Kirino Shader Meta Language).
 
 ## How to use it?
 
-`KSMLCompiler` takes 3 arguments: the GLSL shader file, multiple KSML files to be assembled into the 
-shader, and a series of features to toggle features (currently unused).
-
-After invoking `KSMLCompiler#compile()`, you will get the assembled GLSL shader without any traces 
-of KSML-specific syntax as a string, if none of the errors is encountered. Otherwise, the compiler
-will crash.
+`KSMLCompiler` accepts a GLSL shader, the available KSML source files, and the
+feature names to enable. It also requires an argument to specify the program profile context (`"core"`,
+`"compat"`, or `"compatibility"`).
 
 ```java
-public class Main {
+KSMLCompiler compiler = new KSMLCompiler(
+    SourceFile.fromResource("main.glsl"),
+    new SourceFile[] {
+        SourceFile.fromResource("math.ksml"),
+        SourceFile.fromResource("functional.ksml")
+    },
+    new String[] { "PBR" },
+    "core"
+);
 
-  public static void main(String[] args) throws IOException, URISyntaxException {
-    KSMLCompiler compiler = new KSMLCompiler(SourceFile.fromResource("main.glsl"),
-        new SourceFile[]{SourceFile.fromResource("math.ksml")}, null);
-
-    System.out.println(compiler.compile());
-  }
-}
+String glsl = compiler.compile();
 ```
 
-## Overview
+The resources used in the example are available on the test classpath. 
+Applications should supply their own shader sources.
 
-WIP
+## KSML behavior
 
-## Goals
-
-See [here](https://github.com/CleanroomMC/Kirino-Engine/blob/main/docs/ksml/ksml_spec_v1.md) for the 
-spec. Please note that the compiler behavior may not match the spec exactly as it is still in development.
+The compiler implements the directives in the
+[KSML v2 specification](https://github.com/CleanroomMC/Kirino-Engine/blob/main/docs/ksml/ksml_spec_v2.md):
 
 ## License
 

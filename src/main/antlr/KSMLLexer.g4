@@ -1,17 +1,17 @@
 /*
  MIT License
- 
+
  Copyright (c) 2022 Mustafa Said Ağca
- 
+
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
  including without limitation the rights to use, copy, modify, merge, publish, distribute,
  sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
  furnished to do so, subject to the following conditions:
- 
+
  The above copyright notice and this permission notice shall be included in all copies or
  substantial portions of the Software.
- 
+
  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
  NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
@@ -29,23 +29,10 @@ channels {
     DIRECTIVES
 }
 
-// KSML Specific tokens
-AT : '@';
+tokens { MODULE, REQUIRES, GL_VERSION, EXPORT, GL_REQUIRES, FEATURE, CODE, VERSION_NUMBER }
 
-MODULE : 'module';
-REQUIRES : 'requires';
-GL_VERSION : 'gl_version';
-EXPORT : 'export';
-GL_REQUIRES: 'gl_requires';
-FEATURE : 'feature';
-CODE : 'code';
-
-GL_PROFILE_CORE   : 'core';
-GL_PROFILE_COMPAT : 'compat';
-
+AT : '@' -> pushMode(KSML_META_MODE);
 TRIPLE_QUOTE : '"""';
-
-VERSION_NUMBER : DIGIT_SEQUENCE;
 
 ATOMIC_UINT            : 'atomic_uint';
 ATTRIBUTE              : 'attribute';
@@ -309,7 +296,7 @@ FLOATCONSTANT:
 INTCONSTANT       : DECIMAL_CONSTANT | HEX_CONSTANT | OCTAL_CONSTANT;
 UINTCONSTANT      : INTCONSTANT INTEGER_SUFFIX;
 BLOCK_COMMENT     : '/*' .*? '*/'                           -> channel(HIDDEN);
-IMPORT_DIRECTIVE  : '//' [ \t]* '@import' [ \t]+ IDENTIFIER [ \t]*;
+IMPORT_DIRECTIVE  : '//' [ \t]* '@import' ([ \t]+ ~[\r\n]*)?;
 LINE_COMMENT      : '//' (~ [\r\n\\] | '\\' (NEWLINE | .))* -> channel(HIDDEN);
 LINE_CONTINUATION : '\\' NEWLINE                            -> channel(HIDDEN);
 IDENTIFIER        : [a-zA-Z_] [a-zA-Z0-9_]*;
@@ -366,7 +353,7 @@ SPACE_TAB_3      : SPACE_TAB  -> channel(HIDDEN), type(WHITE_SPACE);
 
 mode LINE_DIRECTIVE_MODE;
 LINE_EXPRESSION : ~ [\r\n]+;
-NEWLINE_7       : NEWLINE   -> channel(HIDDEN), type(WHITE_SPACE), mode(PROGRAM_TEXT_MODE);
+NEWLINE_7       : NEWLINE   -> channel(HIDDEN), type(WHITE_SPACE), popMode;
 
 mode MACRO_TEXT_MODE;
 BLOCK_COMMENT_0    : BLOCK_COMMENT -> channel(HIDDEN), type(BLOCK_COMMENT);
@@ -406,6 +393,32 @@ NEWLINE_11  : NEWLINE                           -> channel(HIDDEN), type(WHITE_S
 NUMBER      : [0-9]+;
 PROFILE     : ('core' | 'compatibility' | 'es');
 SPACE_TAB_7 : SPACE_TAB                         -> channel(HIDDEN), type(WHITE_SPACE);
+
+mode KSML_META_MODE;
+META_MODULE      : 'module'      -> type(MODULE), mode(KSML_NAME_MODE);
+META_REQUIRES    : 'requires'    -> type(REQUIRES), mode(KSML_NAME_MODE);
+META_GL_VERSION  : 'gl_version'  -> type(GL_VERSION), mode(KSML_VERSION_MODE);
+META_EXPORT      : 'export'      -> type(EXPORT), popMode;
+META_GL_REQUIRES : 'gl_requires' -> type(GL_REQUIRES), mode(KSML_VERSION_MODE);
+META_FEATURE     : 'feature'     -> type(FEATURE), mode(KSML_NAME_MODE);
+META_CODE        : 'code'        -> type(CODE), popMode;
+META_SPACE       : [ \t\r\n]+ -> channel(HIDDEN);
+
+mode KSML_NAME_MODE;
+META_NAME        : [a-zA-Z_] [a-zA-Z0-9_]* -> type(IDENTIFIER), popMode;
+META_NAME_SPACE  : [ \t]+ -> channel(HIDDEN);
+
+mode KSML_VERSION_MODE;
+META_VERSION     : [0-9]+ -> type(VERSION_NUMBER), mode(KSML_PROFILE_MODE);
+META_VER_SPACE   : [ \t]+ -> channel(HIDDEN);
+
+mode KSML_PROFILE_MODE;
+META_PROFILE     : [a-zA-Z_] [a-zA-Z0-9_]* -> type(IDENTIFIER), popMode;
+META_PROFILE_AT  : '@' -> type(AT), mode(KSML_META_MODE);
+META_PROFILE_SPACE : [ \t]+ -> channel(HIDDEN);
+META_PROFILE_NEWLINE : [\r\n]+ -> channel(HIDDEN), popMode;
+META_PROFILE_COMMENT : LINE_COMMENT -> channel(HIDDEN), popMode;
+META_PROFILE_BLOCK_COMMENT : BLOCK_COMMENT -> channel(HIDDEN);
 
 fragment DECIMAL_CONSTANT    : [1-9] [0-9]*;
 fragment DIGIT_SEQUENCE      : [0-9]+;

@@ -10,6 +10,15 @@ int add_checked(int a, int b)
 }
 """
 
+@gl_requires 110
+@export
+@code """
+int add_checked(int a, int b, bool f)
+{
+    return a + b;
+}
+"""
+
 @code """
 int internal(int a)
 {

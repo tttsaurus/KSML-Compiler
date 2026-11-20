@@ -2,7 +2,6 @@ plugins {
     id("java")
     antlr
     id("com.gradleup.shadow") version ("8.3.0")
-    application
 }
 
 group = "com.cleanroommc.ksmlc"
@@ -14,6 +13,8 @@ repositories {
 }
 
 dependencies {
+    implementation("org.jspecify:jspecify:1.0.0")
+
     shadow("org.antlr:antlr4-runtime:4.5") {
         isTransitive = false
     }
@@ -25,18 +26,19 @@ dependencies {
     }
 
     implementation("com.github.ChAoSUnItY:Nenggao:1.4.3")
-    
+
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.generateGrammarSource {
+    inputs.property("grammarContents", provider {
+        fileTree("src/main/antlr").matching { include("*.g4") }.files
+            .sortedBy { it.name }.map { it.readText() }
+    })
     arguments.addAll(listOf("-visitor", "-package", "com.cleanroommc.ksmlc.glsl.grammar"))
     outputDirectory = file("build/generated-src/antlr/main/com/cleanroommc/ksmlc/glsl/grammar/")
-}
-
-application {
-    mainClass = "com.cleanroommc.ksmlc.Main"
 }
 
 tasks.test {

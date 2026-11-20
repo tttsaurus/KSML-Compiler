@@ -1,17 +1,17 @@
 /*
  MIT License
- 
+
  Copyright (c) 2022 Mustafa Said Ağca
- 
+
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
  including without limitation the rights to use, copy, modify, merge, publish, distribute,
  sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
  furnished to do so, subject to the following conditions:
- 
+
  The above copyright notice and this permission notice shall be included in all copies or
  substantial portions of the Software.
- 
+
  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
  NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
@@ -41,6 +41,7 @@ variable_identifier
 
 primary_expression
     : variable_identifier
+    | module_keyword
     | TRUE
     | FALSE
     | INTCONSTANT
@@ -48,6 +49,217 @@ primary_expression
     | FLOATCONSTANT
     | DOUBLECONSTANT
     | LEFT_PAREN expression RIGHT_PAREN
+    ;
+
+module_keyword
+    : ATOMIC_UINT
+    | ATTRIBUTE
+    | BOOL
+    | BREAK
+    | BUFFER
+    | BVEC2
+    | BVEC3
+    | BVEC4
+    | CASE
+    | CENTROID
+    | COHERENT
+    | CONST
+    | CONTINUE
+    | DEFAULT
+    | DISCARD
+    | DMAT2
+    | DMAT2X2
+    | DMAT2X3
+    | DMAT2X4
+    | DMAT3
+    | DMAT3X2
+    | DMAT3X3
+    | DMAT3X4
+    | DMAT4
+    | DMAT4X2
+    | DMAT4X3
+    | DMAT4X4
+    | DO
+    | DOUBLE
+    | DVEC2
+    | DVEC3
+    | DVEC4
+    | ELSE
+    | FALSE
+    | FLAT
+    | FLOAT
+    | FOR
+    | HIGHP
+    | IF
+    | IIMAGE1D
+    | IIMAGE1DARRAY
+    | IIMAGE2D
+    | IIMAGE2DARRAY
+    | IIMAGE2DMS
+    | IIMAGE2DMSARRAY
+    | IIMAGE2DRECT
+    | IIMAGE3D
+    | IIMAGEBUFFER
+    | IIMAGECUBE
+    | IIMAGECUBEARRAY
+    | IMAGE1D
+    | IMAGE1DARRAY
+    | IMAGE2D
+    | IMAGE2DARRAY
+    | IMAGE2DMS
+    | IMAGE2DMSARRAY
+    | IMAGE2DRECT
+    | IMAGE3D
+    | IMAGEBUFFER
+    | IMAGECUBE
+    | IMAGECUBEARRAY
+    | IN
+    | INOUT
+    | INT
+    | INVARIANT
+    | ISAMPLER1D
+    | ISAMPLER1DARRAY
+    | ISAMPLER2D
+    | ISAMPLER2DARRAY
+    | ISAMPLER2DMS
+    | ISAMPLER2DMSARRAY
+    | ISAMPLER2DRECT
+    | ISAMPLER3D
+    | ISAMPLERBUFFER
+    | ISAMPLERCUBE
+    | ISAMPLERCUBEARRAY
+    | ISUBPASSINPUT
+    | ISUBPASSINPUTMS
+    | ITEXTURE1D
+    | ITEXTURE1DARRAY
+    | ITEXTURE2D
+    | ITEXTURE2DARRAY
+    | ITEXTURE2DMS
+    | ITEXTURE2DMSARRAY
+    | ITEXTURE2DRECT
+    | ITEXTURE3D
+    | ITEXTUREBUFFER
+    | ITEXTURECUBE
+    | ITEXTURECUBEARRAY
+    | IVEC2
+    | IVEC3
+    | IVEC4
+    | LAYOUT
+    | LOWP
+    | MAT2
+    | MAT2X2
+    | MAT2X3
+    | MAT2X4
+    | MAT3
+    | MAT3X2
+    | MAT3X3
+    | MAT3X4
+    | MAT4
+    | MAT4X2
+    | MAT4X3
+    | MAT4X4
+    | MEDIUMP
+    | NOPERSPECTIVE
+    | OUT
+    | PATCH
+    | PRECISE
+    | PRECISION
+    | READONLY
+    | RESTRICT
+    | RETURN
+    | SAMPLE
+    | SAMPLER
+    | SAMPLER1D
+    | SAMPLER1DARRAY
+    | SAMPLER1DARRAYSHADOW
+    | SAMPLER1DSHADOW
+    | SAMPLER2D
+    | SAMPLER2DARRAY
+    | SAMPLER2DARRAYSHADOW
+    | SAMPLER2DMS
+    | SAMPLER2DMSARRAY
+    | SAMPLER2DRECT
+    | SAMPLER2DRECTSHADOW
+    | SAMPLER2DSHADOW
+    | SAMPLER3D
+    | SAMPLERBUFFER
+    | SAMPLERCUBE
+    | SAMPLERCUBEARRAY
+    | SAMPLERCUBEARRAYSHADOW
+    | SAMPLERCUBESHADOW
+    | SAMPLERSHADOW
+    | SHARED
+    | SMOOTH
+    | STRUCT
+    | SUBPASSINPUT
+    | SUBPASSINPUTMS
+    | SUBROUTINE
+    | SWITCH
+    | TEXTURE1D
+    | TEXTURE1DARRAY
+    | TEXTURE2D
+    | TEXTURE2DARRAY
+    | TEXTURE2DMS
+    | TEXTURE2DMSARRAY
+    | TEXTURE2DRECT
+    | TEXTURE3D
+    | TEXTUREBUFFER
+    | TEXTURECUBE
+    | TEXTURECUBEARRAY
+    | TRUE
+    | UIMAGE1D
+    | UIMAGE1DARRAY
+    | UIMAGE2D
+    | UIMAGE2DARRAY
+    | UIMAGE2DMS
+    | UIMAGE2DMSARRAY
+    | UIMAGE2DRECT
+    | UIMAGE3D
+    | UIMAGEBUFFER
+    | UIMAGECUBE
+    | UIMAGECUBEARRAY
+    | UINT
+    | UNIFORM
+    | USAMPLER1D
+    | USAMPLER1DARRAY
+    | USAMPLER2D
+    | USAMPLER2DARRAY
+    | USAMPLER2DMS
+    | USAMPLER2DMSARRAY
+    | USAMPLER2DRECT
+    | USAMPLER3D
+    | USAMPLERBUFFER
+    | USAMPLERCUBE
+    | USAMPLERCUBEARRAY
+    | USUBPASSINPUT
+    | USUBPASSINPUTMS
+    | UTEXTURE1D
+    | UTEXTURE1DARRAY
+    | UTEXTURE2D
+    | UTEXTURE2DARRAY
+    | UTEXTURE2DMS
+    | UTEXTURE2DMSARRAY
+    | UTEXTURE2DRECT
+    | UTEXTURE3D
+    | UTEXTUREBUFFER
+    | UTEXTURECUBE
+    | UTEXTURECUBEARRAY
+    | UVEC2
+    | UVEC3
+    | UVEC4
+    | VARYING
+    | VEC2
+    | VEC3
+    | VEC4
+    | VOID
+    | VOLATILE
+    | WHILE
+    | WRITEONLY
+    | DEBUG
+    | OFF
+    | ON
+    | OPTIMIZE
+    | STDGL
     ;
 
 postfix_expression
@@ -145,7 +357,7 @@ declaration
     : function_prototype SEMICOLON                                                # functionDecl
     | init_declarator_list SEMICOLON                                              # structDecl
     | PRECISION precision_qualifier type_specifier SEMICOLON                      # precisionDecl
-    | type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE (  
+    | type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE (
         IDENTIFIER array_specifier?
     )? SEMICOLON                                                                  # interfaceBlockDecl
     | type_qualifier identifier_list? SEMICOLON                                   # variableDecl
@@ -529,7 +741,7 @@ external_declaration
 function_definition
     : function_prototype compound_statement_no_new_scope
     ;
-    
+
 // Preprocessor
 compiler_directive
     : define_directive

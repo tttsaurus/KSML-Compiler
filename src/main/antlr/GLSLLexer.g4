@@ -1,6 +1,6 @@
 /*
  MIT License
- 
+
  Copyright (c) 2022 Mustafa Said Ağca
  */
 
@@ -276,7 +276,7 @@ FLOATCONSTANT:
 INTCONSTANT       : DECIMAL_CONSTANT | HEX_CONSTANT | OCTAL_CONSTANT;
 UINTCONSTANT      : INTCONSTANT INTEGER_SUFFIX;
 BLOCK_COMMENT     : '/*' .*? '*/'                           -> channel(HIDDEN);
-IMPORT_DIRECTIVE  : '//' [ \t]* '@import' [ \t]+ IDENTIFIER [ \t]*;
+IMPORT_DIRECTIVE  : '//' [ \t]* '@import' ([ \t]+ ~[\r\n]*)?;
 LINE_COMMENT      : '//' (~ [\r\n\\] | '\\' (NEWLINE | .))* -> channel(HIDDEN);
 LINE_CONTINUATION : '\\' NEWLINE                            -> channel(HIDDEN);
 IDENTIFIER        : [a-zA-Z_] [a-zA-Z0-9_]*;
@@ -332,7 +332,7 @@ SPACE_TAB_3      : SPACE_TAB  -> channel(HIDDEN), type(WHITE_SPACE);
 
 mode LINE_DIRECTIVE_MODE;
 LINE_EXPRESSION : ~ [\r\n]+;
-NEWLINE_7       : NEWLINE   -> channel(HIDDEN), type(WHITE_SPACE), mode(PROGRAM_TEXT_MODE);
+NEWLINE_7       : NEWLINE   -> channel(HIDDEN), type(WHITE_SPACE), popMode;
 
 mode MACRO_TEXT_MODE;
 BLOCK_COMMENT_0    : BLOCK_COMMENT -> channel(HIDDEN), type(BLOCK_COMMENT);

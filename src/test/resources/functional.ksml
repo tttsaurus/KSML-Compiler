@@ -1,0 +1,10 @@
+@module functional
+@gl_version 400 core
+
+@gl_requires 460
+@code """
+int id(int a)
+{
+    return a;
+}
+"""

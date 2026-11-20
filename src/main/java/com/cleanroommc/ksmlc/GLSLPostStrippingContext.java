@@ -1,30 +1,43 @@
 package com.cleanroommc.ksmlc;
 
+import org.jspecify.annotations.Nullable;
+
 public class GLSLPostStrippingContext {
 
-  public final String version;
-  public final String versionProfile;
+    public final @Nullable String version;
+    public final @Nullable String versionProfile;
+    public final String extensions;
 
-  private GLSLPostStrippingContext(final String version, final String versionProfile) {
-    this.version = version;
-    this.versionProfile = versionProfile;
-  }
+    private GLSLPostStrippingContext(
+            final @Nullable String version,
+            final @Nullable String versionProfile,
+            final String extensions) {
 
-  public static class Builder {
-
-    private String version;
-    private String versionProfile;
-
-    public void setVersion(final String version) {
-      this.version = version;
+        this.version = version;
+        this.versionProfile = versionProfile;
+        this.extensions = extensions;
     }
 
-    public void setVersionProfile(final String versionProfile) {
-      this.versionProfile = versionProfile;
-    }
+    public static class Builder {
 
-    public GLSLPostStrippingContext build() {
-      return new GLSLPostStrippingContext(version, versionProfile);
+        private @Nullable String version;
+        private @Nullable String versionProfile;
+        private final StringBuilder extensions = new StringBuilder();
+
+        public void addExtension(String directive) {
+            extensions.append(directive).append('\n');
+        }
+
+        public void setVersion(final String version) {
+            this.version = version;
+        }
+
+        public void setVersionProfile(final @Nullable String versionProfile) {
+            this.versionProfile = versionProfile;
+        }
+
+        public GLSLPostStrippingContext build() {
+            return new GLSLPostStrippingContext(version, versionProfile, extensions.toString());
+        }
     }
-  }
 }

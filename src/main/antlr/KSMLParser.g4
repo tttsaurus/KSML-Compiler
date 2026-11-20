@@ -3,10 +3,10 @@ parser grammar KSMLParser;
 import GLSLParser;
 
 options {
-	tokenVocab = KSMLLexer;
+    tokenVocab = KSMLLexer;
 }
 
-ksmlTranslationUnit : moduleMeta glVersionMeta requiresMeta* ksmlDeclaration* EOF;
+ksmlTranslationUnit : moduleMeta (glVersionMeta | requiresMeta)* ksmlDeclaration* EOF;
 
 moduleMeta : AT MODULE IDENTIFIER;
 
@@ -14,7 +14,7 @@ requiresMeta : AT REQUIRES IDENTIFIER;
 
 glVersionMeta : AT GL_VERSION VERSION_NUMBER glVersionIdent?;
 
-glVersionIdent : GL_PROFILE_CORE | GL_PROFILE_COMPAT;
+glVersionIdent : IDENTIFIER;
 
 ksmlDeclaration : declarationMeta* codeBlock;
 

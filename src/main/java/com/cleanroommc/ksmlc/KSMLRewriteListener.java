@@ -1,183 +1,273 @@
 package com.cleanroommc.ksmlc;
 
-import chaos.unity.nenggao.FileReportBuilder;
-import com.cleanroommc.ksmlc.glsl.grammar.KSMLLexer;
 import com.cleanroommc.ksmlc.glsl.grammar.KSMLParser.*;
 import com.cleanroommc.ksmlc.glsl.grammar.KSMLParserBaseListener;
-import com.diogonunes.jcolor.Attribute;
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.TokenStreamRewriter;
-import org.antlr.v4.runtime.misc.Interval;
 
 import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.TokenStreamRewriter;
+import org.antlr.v4.runtime.misc.Interval;
+import org.jspecify.annotations.Nullable;
 
 public class KSMLRewriteListener extends KSMLParserBaseListener implements RewriterListener {
 
-  private final TokenStreamRewriter rewriter;
-  private final SourceFile ksmlSource;
-  private final FileReportBuilder fileReportBuilder;
-  private final KSMLFileContext.Builder builder;
-  private final int fileId;
-  // @module context
-  private String moduleName;
-  // @gl_require context
-  private String requireVersion;
-  // @export context
-  private ExportMetaContext exportMetaCtx;
-  // @gl_requires context
-  private GlRequiresMetaContext glRequiresMetaCtx;
-  // @feature context
-  private List<FeatureMetaContext> featureMetaCtxs = new ArrayList<>();
-  // @code context
-  private CodeBlockContext codeBlockCtx;
+    private final TokenStreamRewriter rewriter;
+    private final SourceFile source;
+    private final KSMLFileContext.Builder builder;
+    private final int fileId;
+    private final Set<String> features;
+    private final String profileHint;
+    private final Set<String> localFunctions = new HashSet<>();
+    private final Set<String> dependencies = new HashSet<>();
+    private @Nullable String moduleName;
+    private @Nullable GLVersion moduleVersion;
+    private @Nullable GLVersion functionVersion;
+    private boolean enabled;
+    private boolean exported;
 
-  public KSMLRewriteListener(final TokenStreamRewriter rewriter,
-                             final SourceFile ksmlSource,
-                             final KSMLFileContext.Builder builder,
-                             final int fileId) {
-    this.rewriter = rewriter;
-    this.ksmlSource = ksmlSource;
-    this.fileReportBuilder = ksmlSource.reportBuilder();
-    this.builder = builder;
-    this.fileId = fileId;
-  }
+    public KSMLRewriteListener(
+            TokenStreamRewriter rewriter,
+            SourceFile source,
+            KSMLFileContext.Builder builder,
+            int fileId,
+            Set<String> features,
+            String profileHint) {
 
-  @Override
-  public void enterKsmlTranslationUnit(KsmlTranslationUnitContext ctx) {
-    deleteNewlines(ctx.moduleMeta());
-    super.enterKsmlTranslationUnit(ctx);
-  }
-
-  @Override
-  public void enterKsmlDeclaration(KsmlDeclarationContext ctx) {
-    for (var metaCtx : ctx.declarationMeta()) {
-      deleteNewlines(metaCtx);
-    }
-    deleteNewlines(ctx.codeBlock());
-  }
-
-  @Override
-  public void enterModuleMeta(ModuleMetaContext ctx) {
-    builder.setModule(moduleName = ctx.IDENTIFIER().getText());
-    deleteNewlines(ctx);
-    deleteCtx(ctx);
-  }
-
-  @Override
-  public void enterRequiresMeta(RequiresMetaContext ctx) {
-    builder.addRequiredModule(ctx.IDENTIFIER().getText());
-    deleteNewlines(ctx);
-    deleteCtx(ctx);
-  }
-
-  @Override
-  public void enterGlVersionMeta(GlVersionMetaContext ctx) {
-    var profile = ctx.glVersionIdent();
-    var profileIndent = profile != null ? profile.getText() : null;
-
-    builder.setGlVersion(ctx.VERSION_NUMBER().getText(), profileIndent);
-    deleteNewlines(ctx);
-    deleteCtx(ctx);
-  }
-
-  @Override
-  public void enterExportMeta(ExportMetaContext ctx) {
-    if (exportMetaCtx != null) {
-      fileReportBuilder.error(Utils.spanFromCtx(ctx),
-                      "Cannot export multiple times for declaration")
-              .label(Utils.spanFromCtx(ctx), "Error occurs here").color(Attribute.RED_TEXT()).build()
-              .build();
+        this.rewriter = rewriter;
+        this.source = source;
+        this.builder = builder;
+        this.fileId = fileId;
+        this.features = features;
+        this.profileHint = profileHint;
     }
 
-    exportMetaCtx = ctx;
-    deleteNewlines(ctx);
-    deleteCtx(ctx);
-  }
-
-  @Override
-  public void enterGlRequiresMeta(GlRequiresMetaContext ctx) {
-    if (requireVersion != null) {
-      fileReportBuilder.error(Utils.spanFromCtx(ctx),
-                      "Cannot require version multiple times for declaration")
-              .label(Utils.spanFromCtx(ctx), "Error occurs here").color(Attribute.RED_TEXT()).build()
-              .build();
+    private boolean isEnabled(KsmlDeclarationContext declaration) {
+        return declaration.declarationMeta().stream().allMatch(meta -> meta.featureMeta() == null || features.contains(meta.featureMeta().IDENTIFIER().getText()));
     }
 
-    requireVersion = ctx.VERSION_NUMBER().getText();
-    glRequiresMetaCtx = ctx;
-    deleteNewlines(ctx);
-    deleteCtx(ctx);
-  }
+    @Override
+    public void enterKsmlTranslationUnit(KsmlTranslationUnitContext ctx) {
+        for (var declaration : ctx.ksmlDeclaration()) {
+            if (isEnabled(declaration)) {
+                localFunctions.add(declaration
+                        .codeBlock()
+                        .function_definition()
+                        .function_prototype()
+                        .IDENTIFIER()
+                        .getText());
+            }
+        }
 
-  @Override
-  public void enterFeatureMeta(FeatureMetaContext ctx) {
-    featureMetaCtxs.add(ctx);
-  }
-
-  @Override
-  public void exitCodeBlock(CodeBlockContext ctx) {
-    rewriter.delete(ctx.AT().getSymbol(), ctx.TRIPLE_QUOTE(0).getSymbol());
-    deleteNewlines(ctx.TRIPLE_QUOTE(0));
-    rewriter.delete(ctx.TRIPLE_QUOTE(1).getSymbol());
-    // Clear meta contexts
-    exportMetaCtx = null;
-    glRequiresMetaCtx = null;
-    featureMetaCtxs.clear();
-  }
-
-  @Override
-  public void enterFunction_definition(Function_definitionContext ctx) {
-    var functionNameIdentifier = ctx.function_prototype().IDENTIFIER();
-    var functionName = functionNameIdentifier.getText();
-
-    if (!builder.addMemberName(functionName, functionName)) {
-      fileReportBuilder.error(Utils.spanFromCtx(ctx.function_prototype()),
-                      "Function with same name already exists in module")
-              .label(Utils.spanFromCtx(ctx), "Error occurs here").color(Attribute.RED_TEXT()).build()
-              .build();
+        if (ctx.glVersionMeta().size() != 1) {
+            Utils.error(source, Utils.spanFromToken(ctx.moduleMeta().start),
+                    "A module must declare exactly one \"@gl_version\"");
+        }
     }
 
-    if (exportMetaCtx != null) {
-      builder.addExportable(functionName,
-              functionName,
-              requireVersion,
-              KSMLFileContext.ExportTargetType.Function);
+    @Override
+    public void enterModuleMeta(ModuleMetaContext ctx) {
+        moduleName = ctx.IDENTIFIER().getText();
+        builder.setModule(moduleName);
+        deleteTokens(ctx.start, ctx.stop);
     }
 
-    rewriter.replace(functionNameIdentifier.getSymbol(), functionNameIdentifier.getSymbol(),
-            Utils.synthesizeModuleMemberName(moduleName, functionName));
-    builder.addDeclarationPrototype(rewriter.getText(
-            new Interval(ctx.function_prototype().start.getTokenIndex(),
-                    ctx.function_prototype().stop.getTokenIndex())));
-    builder.addModuleMemberReference(moduleName, functionName, Utils.spanFromCtx(ctx));
-    // Add line directive after prototype is registered so that
-    // the declaration prototypes are clean on site
-    rewriter.insertBefore(ctx.start, String.format("#line %d %d\n", ctx.start.getLine(), fileId));
-  }
-
-  @Override
-  public void enterFunctionCall(FunctionCallContext ctx) {
-    if (ctx.postfix_expression() instanceof MemberAccessContext maCtx) {
-      var moduleName = rewriter.getText(
-              Interval.of(maCtx.postfix_expression().start.getTokenIndex(),
-                      maCtx.postfix_expression().stop.getTokenIndex()));
-      var functionName = maCtx.field_selection().variable_identifier().IDENTIFIER().getText();
-
-      // ChAoS: We assume the target reference is present here, but later actually checked in KSMLChecker
-      builder.addModuleMemberReference(moduleName, functionName, Utils.spanFromCtx(ctx));
-      rewriter.replace(maCtx.start, maCtx.stop,
-              Utils.synthesizeModuleMemberName(moduleName, functionName));
+    @Override
+    public void enterRequiresMeta(RequiresMetaContext ctx) {
+        builder.addRequiredModule(ctx.IDENTIFIER().getText(), Utils.spanFromToken(ctx.IDENTIFIER().getSymbol()));
+        dependencies.add(ctx.IDENTIFIER().getText());
+        deleteTokens(ctx.start, ctx.stop);
     }
-  }
 
-  @Override
-  public TokenStreamRewriter getRewriter() {
-    return rewriter;
-  }
+    @Override
+    public void enterGlVersionMeta(GlVersionMetaContext ctx) {
+        String profile = ctx.glVersionIdent() == null ? null : ctx.glVersionIdent().getText();
+        builder.setGlVersion(ctx.VERSION_NUMBER().getText(), profile);
+        moduleVersion = GLVersion.parse(source, ctx.VERSION_NUMBER().getText(), profile, profileHint, Utils.spanFromToken(ctx.start), false);
+        deleteTokens(ctx.start, ctx.stop);
+    }
 
-  @Override
-  public int getNewLineType() {
-    return KSMLLexer.NEW_LINES;
-  }
+    @Override
+    public void enterKsmlDeclaration(KsmlDeclarationContext ctx) {
+        enabled = isEnabled(ctx);
+        exported = false;
+        functionVersion = moduleVersion;
+        if (!enabled) {
+            deleteTokens(ctx.start, ctx.stop);
+            return;
+        }
+
+        boolean hasRequirement = false;
+        for (var meta : ctx.declarationMeta()) {
+            if (meta.exportMeta() != null) {
+                if (exported) {
+                    Utils.error(source, Utils.spanFromToken(meta.start),
+                            "A declaration may have only one \"@export\"");
+                }
+                exported = true;
+            } else if (meta.glRequiresMeta() != null) {
+                if (hasRequirement) {
+                    Utils.error(source, Utils.spanFromToken(meta.start),
+                            "A declaration may have only one \"@gl_requires\"");
+                }
+                hasRequirement = true;
+                var requirement = meta.glRequiresMeta();
+                functionVersion = GLVersion.parse(source, requirement.VERSION_NUMBER().getText(),
+                        requirement.glVersionIdent() == null ? null : requirement.glVersionIdent().getText(),
+                        profileHint, Utils.spanFromToken(requirement.start), false);
+            }
+            deleteTokens(meta.start, meta.stop);
+        }
+    }
+
+    @Override
+    public void enterCodeBlock(CodeBlockContext ctx) {
+        if (!enabled) {
+            return;
+        }
+
+        deleteTokens(ctx.AT().getSymbol(), ctx.TRIPLE_QUOTE(0).getSymbol());
+        replaceWithNewline(ctx.TRIPLE_QUOTE(1).getSymbol());
+    }
+
+    @Override
+    public void enterFunction_definition(Function_definitionContext ctx) {
+        if (!enabled) {
+            return;
+        }
+
+        String moduleName = Objects.requireNonNull(this.moduleName, "moduleName");
+        var prototype = ctx.function_prototype();
+        String name = prototype.IDENTIFIER().getText();
+        builder.addMemberName(name, name);
+        if (exported) {
+            builder.addExportable(
+                    name,
+                    name,
+                    functionVersion == null ? null : Integer.toString(functionVersion.number()),
+                    KSMLFileContext.ExportTargetType.Function);
+        }
+
+        int count = prototype.function_parameters() == null
+                ? 0
+                : prototype.function_parameters().parameter_declaration().size();
+        if (prototype.function_parameters() != null && "void".equals(prototype.function_parameters().getText())) {
+            count = 0;
+        }
+
+        builder.addFunction(new KSMLFileContext.FunctionInfo(
+                name,
+                count,
+                exported,
+                functionVersion,
+                Utils.spanFromToken(prototype.start)));
+
+        if (exported) {
+            addExportedWrapper(prototype);
+        }
+
+        rewriter.replace(prototype.IDENTIFIER().getSymbol(), Utils.synthesizeModuleMemberName(moduleName, name));
+        builder.addDeclarationPrototype(rewriter.getText(Interval.of(prototype.start.getTokenIndex(), prototype.stop.getTokenIndex())));
+        rewriter.insertBefore(ctx.start, String.format("\n#line %d %d\n", ctx.start.getLine(), fileId));
+    }
+
+    private void addExportedWrapper(Function_prototypeContext prototype) {
+        String moduleName = Objects.requireNonNull(this.moduleName, "moduleName");
+        String name = prototype.IDENTIFIER().getText();
+        var wrapper = new TokenStreamRewriter(rewriter.getTokenStream());
+        wrapper.replace(prototype.IDENTIFIER().getSymbol(), Utils.synthesizeExportedMemberName(moduleName, name));
+        var arguments = new ArrayList<String>();
+        var usedNames = new HashSet<String>();
+        if (prototype.function_parameters() != null && !"void".equals(prototype.function_parameters().getText())) {
+            for (var parameter : prototype.function_parameters().parameter_declaration()) {
+                if (parameter.parameter_declarator() != null) {
+                    usedNames.add(parameter.parameter_declarator().IDENTIFIER().getText());
+                }
+            }
+            for (var parameter : prototype.function_parameters().parameter_declaration()) {
+                String argument;
+                if (parameter.parameter_declarator() != null) {
+                    argument = parameter.parameter_declarator().IDENTIFIER().getText();
+                } else {
+                    argument = "ksml_arg_" + arguments.size();
+                    while (usedNames.contains(argument)) {
+                        argument += "_";
+                    }
+                    usedNames.add(argument);
+                    wrapper.insertAfter(parameter.stop, " " + argument);
+                }
+                arguments.add(argument);
+            }
+        }
+
+        boolean returnsVoid = prototype
+                .fully_specified_type()
+                .type_specifier()
+                .type_specifier_nonarray().VOID() != null;
+
+        String signature = wrapper.getText(Interval.of(prototype.start.getTokenIndex(), prototype.stop.getTokenIndex()));
+
+        builder.addExportedWrapper(String.format("#line %d %d\n%s { %s%s(%s); }\n",
+                prototype.start.getLine(),
+                fileId,
+                signature,
+                returnsVoid ? "" : "return ",
+                Utils.synthesizeModuleMemberName(moduleName, name),
+                String.join(", ", arguments)));
+    }
+
+    private void rewriteLocal(Token name, int count) {
+        if (!enabled || !localFunctions.contains(name.getText())) {
+            return;
+        }
+
+        String moduleName = Objects.requireNonNull(this.moduleName, "moduleName");
+        builder.addModuleMemberReference(moduleName, name.getText(), Utils.spanFromToken(name), functionVersion, count);
+        rewriter.replace(name, Utils.synthesizeModuleMemberName(moduleName, name.getText()));
+    }
+
+    @Override
+    public void enterTypeConstructor(TypeConstructorContext ctx) {
+        var type = ctx.type_specifier().type_specifier_nonarray().type_name();
+        if (type != null) {
+            var parameters = ctx.function_call_parameters();
+            int count = parameters == null || parameters.VOID() != null ? 0 : parameters.assignment_expression().size();
+            rewriteLocal(type.IDENTIFIER().getSymbol(), count);
+        }
+    }
+
+    @Override
+    public void enterFunctionCall(FunctionCallContext ctx) {
+        if (!enabled) {
+            return;
+        }
+
+        var parameters = ctx.function_call_parameters();
+        int count = parameters == null || parameters.VOID() != null ? 0 : parameters.assignment_expression().size();
+        if (ctx.postfix_expression() instanceof PrimaryContext primary && primary.primary_expression().variable_identifier() != null) {
+            rewriteLocal(primary.primary_expression().variable_identifier().IDENTIFIER().getSymbol(), count);
+        } else if (ctx.postfix_expression() instanceof MemberAccessContext member
+                && member.postfix_expression() instanceof PrimaryContext primary
+                && (primary.primary_expression().variable_identifier() != null
+                || primary.primary_expression().module_keyword() != null)
+                && member.field_selection().variable_identifier() != null) {
+
+            String module = primary.primary_expression().getText();
+            String name = member.field_selection().getText();
+            if ("length".equals(name) && count == 0 && !module.equals(moduleName) && !dependencies.contains(module)) {
+                return;
+            }
+
+            builder.addModuleMemberReference(module, name, Utils.spanFromToken(ctx.start), functionVersion, count);
+            rewriter.replace(member.start, member.stop, Utils.synthesizeModuleMemberName(module, name));
+        }
+    }
+
+    @Override
+    public TokenStreamRewriter getRewriter() {
+        return rewriter;
+    }
 }

@@ -1,27 +1,34 @@
 package com.cleanroommc.ksmlc;
 
-import chaos.unity.nenggao.FileReportBuilder;
-import chaos.unity.nenggao.Span;
-import com.diogonunes.jcolor.Attribute;
 import org.antlr.v4.runtime.BaseErrorListener;
-import org.antlr.v4.runtime.CommonToken;
 import org.antlr.v4.runtime.RecognitionException;
 import org.antlr.v4.runtime.Recognizer;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.LexerNoViableAltException;
+import org.jspecify.annotations.Nullable;
 
 public class GeneralErrorListener extends BaseErrorListener {
-  private final FileReportBuilder fileReportBuilder;
 
-  public GeneralErrorListener(SourceFile srcFile) {
-    this.fileReportBuilder = srcFile.reportBuilder();
-  }
+    private final SourceFile source;
 
-  @Override
-  public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol,
-                          int line, int charPositionInLine, String msg, RecognitionException e) {
-    final var offendingToken = (CommonToken) offendingSymbol;
-    final var span = Span.singleLine(line, charPositionInLine, charPositionInLine + offendingToken.getText().length());
-    fileReportBuilder.error(span, "Syntax error: %s", msg)
-            .label(span, "Error occurs here").color(Attribute.RED_TEXT()).build()
-            .build();
-  }
+    public GeneralErrorListener(SourceFile source) {
+        this.source = source;
+    }
+
+    @Override
+    public void syntaxError(
+        Recognizer<?, ?> recognizer,
+        @Nullable Object offendingSymbol,
+        int line,
+        int charPositionInLine,
+        String msg,
+        @Nullable RecognitionException e) {
+
+        int length = offendingSymbol instanceof Token token && token.getType() != Token.EOF
+                ? token.getText().split("\\r?\\n", -1)[0].length()
+                : e instanceof LexerNoViableAltException ? 1 : 0;
+
+        Utils.error(source, Utils.sourcePosition(source, line, charPositionInLine, length),
+                "Syntax error: %s", msg);
+    }
 }
