@@ -30,8 +30,7 @@ public class KSMLChecker {
             for (var dependency : new LinkedHashSet<>(ctx.requiredModules)) {
                 var required = versions.get(dependency);
                 if (provided != null && required != null && provided.compareTo(required) < 0) {
-                    Utils.warning(ctx.sourceFile, ctx.requiredModuleSpans.getOrDefault(dependency,
-                                    Utils.sourcePosition(ctx.sourceFile, 1, 0, 1)),
+                    Utils.notice(ctx.sourceFile, ctx.requiredModuleSpans.getOrDefault(dependency, Utils.sourcePosition(ctx.sourceFile, 1, 0, 1)),
                             "Module \"%s\" requires %s, but module \"%s\" provides %s",
                             dependency, required, ctx.moduleName, provided);
                 }

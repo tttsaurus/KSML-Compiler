@@ -25,10 +25,14 @@ String glsl = compiler.compile();
 The resources used in the example are available on the test classpath. 
 Applications should supply their own shader sources.
 
+Module-level version mismatches produce cyan `NOTICE` diagnostics; function-level
+version mismatches remain yellow warnings. Notices are stored separately in
+`SourceFile.notices()` and do not count toward `reportBuilder().containsWarning()`.
+Use `SourceFile.printDiagnostics(stream, enableColor)` to print all diagnostic levels.
+
 ## KSML behavior
 
-The compiler implements the directives in the
-[KSML v2 specification](https://github.com/CleanroomMC/Kirino-Engine/blob/main/docs/ksml/ksml_spec_v2.md):
+The compiler implements the directives in the [KSML v2 specification](https://github.com/CleanroomMC/Kirino-Engine/blob/main/docs/ksml/ksml_spec_v2.md).
 
 ## License
 

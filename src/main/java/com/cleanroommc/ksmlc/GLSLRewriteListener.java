@@ -130,7 +130,7 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
                 String importHint = !imported.contains(module.moduleName) && introducer != null
                         ? String.format(" (indirect import. introduced by \"%s\")", introducer)
                         : "";
-                Utils.warning(source, Utils.spanFromToken(ctx.start),
+                Utils.notice(source, Utils.spanFromToken(ctx.start),
                         "Module \"%s\" requires %s, but shader \"%s\" provides %s%s",
                         module.moduleName, required, source.fileName(), version, importHint);
             }

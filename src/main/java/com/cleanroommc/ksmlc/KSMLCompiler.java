@@ -91,7 +91,7 @@ public class KSMLCompiler {
 
         failOnErrors(sources);
 
-        sources.forEach(source -> source.reportBuilder().print(System.err));
+        sources.forEach(source -> source.printDiagnostics(System.err, true));
 
         var result = new StringBuilder();
         assembleGLSLVersion(postBuilder.build(), result);
@@ -110,7 +110,7 @@ public class KSMLCompiler {
 
     private void failOnErrors(List<SourceFile> sources) {
         if (sources.stream().anyMatch(source -> source.reportBuilder().containsError())) {
-            sources.forEach(source -> source.reportBuilder().print(System.err));
+            sources.forEach(source -> source.printDiagnostics(System.err, true));
             throw new KSMLCompilationException(sources);
         }
     }

@@ -33,6 +33,10 @@ public final class Utils {
                 .build();
     }
 
+    public static void notice(SourceFile source, AbstractSpan span, String message, @Nullable Object... args) {
+        source.notices().add(new SourceFile.Notice(span, String.format(message, args)));
+    }
+
     public static AbstractSpan spanFromToken(Token token) {
         String text = token.getText();
         int length = token.getType() == Token.EOF || text == null
