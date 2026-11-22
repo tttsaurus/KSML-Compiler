@@ -8,17 +8,15 @@ import java.util.Objects;
 public class KSMLChecker {
 
     private final List<KSMLFileContext> contexts;
-    private final String profileHint;
 
-    KSMLChecker(List<KSMLFileContext> contexts, String profileHint) {
+    KSMLChecker(List<KSMLFileContext> contexts) {
         this.contexts = contexts;
-        this.profileHint = profileHint;
     }
 
     public void check() {
         var versions = new HashMap<String, GLVersion>();
         for (var ctx : contexts) {
-            var version = GLVersion.parse(ctx.sourceFile, ctx.glVersion, ctx.glProfile, profileHint,
+            var version = GLVersion.parse(ctx.sourceFile, ctx.glVersion, ctx.glProfile,
                     Utils.sourcePosition(ctx.sourceFile, 1, 0, 1), false);
             if (version != null) {
                 versions.put(ctx.moduleName, version);

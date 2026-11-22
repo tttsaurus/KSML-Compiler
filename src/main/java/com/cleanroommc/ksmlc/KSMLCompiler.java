@@ -20,19 +20,16 @@ public class KSMLCompiler {
     private final String[] features;
 
     private int fileIdCounter = 0;
-    private final String profileHint;
     private List<SourceFile> lastSources = List.of();
 
     public KSMLCompiler(
             SourceFile glslSource,
             SourceFile[] ksmlSources,
-            String @Nullable [] features,
-            String profileContextHint) {
+            String @Nullable [] features) {
 
         this.glslSource = Objects.requireNonNull(glslSource, "glslSource");
         this.ksmlSources = Objects.requireNonNull(ksmlSources, "ksmlSources").clone();
         this.features = features == null ? new String[0] : features.clone();
-        this.profileHint = GLVersion.normalizeProfile(profileContextHint);
     }
 
     public String compile() {
@@ -56,7 +53,7 @@ public class KSMLCompiler {
                     KSMLParser::new,
                     KSMLParser::ksmlTranslationUnit,
                     GeneralErrorListener::new,
-                    rewriter -> new KSMLRewriteListener(rewriter, source, contextBuilder, fileId, enabledFeatures, profileHint));
+                    rewriter -> new KSMLRewriteListener(rewriter, source, contextBuilder, fileId, enabledFeatures));
 
             if (source.reportBuilder().containsError()) {
                 continue;
@@ -85,9 +82,9 @@ public class KSMLCompiler {
                 GLSLParser::new,
                 GLSLParser::translation_unit,
                 GeneralErrorListener::new,
-                rewriter -> new GLSLRewriteListener(rewriter, shader, contexts, selected, postBuilder, fileId, profileHint));
+                rewriter -> new GLSLRewriteListener(rewriter, shader, contexts, selected, postBuilder, fileId));
 
-        new KSMLChecker(selected, profileHint).check();
+        new KSMLChecker(selected).check();
 
         failOnErrors(sources);
 
@@ -140,12 +137,16 @@ public class KSMLCompiler {
     private void assembleKSMLModuleHeaders(final List<KSMLFileContext> contexts, final StringBuilder builder) {
         for (var ctx : contexts) {
             var glProfile = ctx.glProfile;
-            if (glProfile == null) {
-                glProfile = Integer.parseInt(ctx.glVersion) < 150 ? "compat" : profileHint;
+            if (glProfile == null && Integer.parseInt(ctx.glVersion) >= 150) {
+                glProfile = "core";
             }
 
             builder.append(String.format("/* MODULE \"%s\" PROTOTYPE DEFINITIONS */\n", ctx.moduleName));
-            builder.append(String.format("/* MODULE GL_VERSION: %s %s */\n", ctx.glVersion, glProfile));
+            builder.append("/* MODULE GL_VERSION: ").append(ctx.glVersion);
+            if (glProfile != null) {
+                builder.append(' ').append(glProfile);
+            }
+            builder.append(" */\n");
             builder.append("/* AUTO-GENERATED PROTOTYPES */\n\n");
             for (var declaration : ctx.declarationPrototypes) {
                 builder.append(declaration).append(";\n");

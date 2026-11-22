@@ -20,7 +20,6 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
     private final KSMLFileContext.Builder builder;
     private final int fileId;
     private final Set<String> features;
-    private final String profileHint;
     private final Set<String> localFunctions = new HashSet<>();
     private final Set<String> dependencies = new HashSet<>();
     private @Nullable String moduleName;
@@ -34,15 +33,13 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
             SourceFile source,
             KSMLFileContext.Builder builder,
             int fileId,
-            Set<String> features,
-            String profileHint) {
+            Set<String> features) {
 
         this.rewriter = rewriter;
         this.source = source;
         this.builder = builder;
         this.fileId = fileId;
         this.features = features;
-        this.profileHint = profileHint;
     }
 
     private boolean isEnabled(KsmlDeclarationContext declaration) {
@@ -86,7 +83,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
     public void enterGlVersionMeta(GlVersionMetaContext ctx) {
         String profile = ctx.glVersionIdent() == null ? null : ctx.glVersionIdent().getText();
         builder.setGlVersion(ctx.VERSION_NUMBER().getText(), profile);
-        moduleVersion = GLVersion.parse(source, ctx.VERSION_NUMBER().getText(), profile, profileHint, Utils.spanFromToken(ctx.start), false);
+        moduleVersion = GLVersion.parse(source, ctx.VERSION_NUMBER().getText(), profile, Utils.spanFromToken(ctx.start), false);
         deleteTokens(ctx.start, ctx.stop);
     }
 
@@ -117,7 +114,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
                 var requirement = meta.glRequiresMeta();
                 functionVersion = GLVersion.parse(source, requirement.VERSION_NUMBER().getText(),
                         requirement.glVersionIdent() == null ? null : requirement.glVersionIdent().getText(),
-                        profileHint, Utils.spanFromToken(requirement.start), false);
+                        Utils.spanFromToken(requirement.start), false);
             }
             deleteTokens(meta.start, meta.stop);
         }

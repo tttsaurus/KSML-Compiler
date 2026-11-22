@@ -16,8 +16,7 @@ class KSMLCompilerTest {
                 new SourceFile[] {
                         SourceFile.fromResource("math.ksml"),
                         SourceFile.fromResource("functional.ksml") },
-                null,
-                "core");
+                null);
 
         String glsl = compiler.compile();
 

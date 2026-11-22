@@ -5,7 +5,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.Set;
 
-public record GLVersion(int number, String profile) implements Comparable<GLVersion> {
+public record GLVersion(int number, @Nullable String profile) implements Comparable<GLVersion> {
 
     private static final Set<Integer> VERSIONS = Set.of(
             110,
@@ -36,7 +36,6 @@ public record GLVersion(int number, String profile) implements Comparable<GLVers
             SourceFile source,
             String number,
             @Nullable String profile,
-            String profileHint,
             AbstractSpan span,
             boolean shader) {
 
@@ -59,7 +58,7 @@ public record GLVersion(int number, String profile) implements Comparable<GLVers
                         "Profile \"%s\" cannot be declared for GL%d. Profiles require GL150 or later", profile, version);
                 return null;
             }
-            return new GLVersion(version, "compat");
+            return new GLVersion(version, null);
         }
 
         if (profile != null && !("core".equals(profile)
@@ -69,7 +68,7 @@ public record GLVersion(int number, String profile) implements Comparable<GLVers
             return null;
         }
 
-        return new GLVersion(version, normalizeProfile(profile == null ? profileHint : profile));
+        return new GLVersion(version, normalizeProfile(profile == null ? "core" : profile));
     }
 
     @Override
@@ -80,6 +79,6 @@ public record GLVersion(int number, String profile) implements Comparable<GLVers
 
     @Override
     public String toString() {
-        return "GL" + number + " " + profile;
+        return "GL" + number + (profile == null ? "" : " " + profile);
     }
 }

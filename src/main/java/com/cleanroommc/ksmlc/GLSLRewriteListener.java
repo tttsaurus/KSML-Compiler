@@ -24,7 +24,6 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
     private final List<KSMLFileContext> selected;
     private final GLSLPostStrippingContext.Builder builder;
     private final int fileId;
-    private final String profileHint;
     private final Set<String> imported = new HashSet<>();
     private @Nullable GLVersion version;
     private boolean seenVersion;
@@ -36,17 +35,15 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
             List<KSMLFileContext> contexts,
             List<KSMLFileContext> selected,
             GLSLPostStrippingContext.Builder builder,
-            int fileId,
-            String profileHint) {
+            int fileId) {
 
         this.rewriter = rewriter;
         this.source = source;
         this.selected = selected;
         this.builder = builder;
         this.fileId = fileId;
-        this.profileHint = profileHint;
         contexts.forEach(ctx -> modules.putIfAbsent(ctx.moduleName, ctx));
-        version = new GLVersion(110, "compat");
+        version = new GLVersion(110, null);
     }
 
     @Override
@@ -97,7 +94,7 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
         builder.setVersion(ctx.number().getText());
         String profile = ctx.profile() == null ? null : ctx.profile().getText();
         builder.setVersionProfile(profile);
-        version = GLVersion.parse(source, ctx.number().getText(), profile, profileHint, Utils.spanFromToken(ctx.start), true);
+        version = GLVersion.parse(source, ctx.number().getText(), profile, Utils.spanFromToken(ctx.start), true);
         deleteTokens(ctx.start, ctx.stop);
     }
 
@@ -123,7 +120,7 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
     @Override
     public void exitTranslation_unit(GLSLParser.Translation_unitContext ctx) {
         for (var module : selected) {
-            var required = GLVersion.parse(module.sourceFile, module.glVersion, module.glProfile, profileHint,
+            var required = GLVersion.parse(module.sourceFile, module.glVersion, module.glProfile,
                     Utils.sourcePosition(module.sourceFile, 1, 0, 1), false);
             if (version != null && required != null && version.compareTo(required) < 0) {
                 var introducer = introducedBy.get(module.moduleName);
