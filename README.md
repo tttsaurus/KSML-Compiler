@@ -2,6 +2,9 @@
 
 A compiler for the KSML language (also known as Kirino Shader Meta Language).
 
+- KSML Specification: https://github.com/CleanroomMC/KSML-Spec
+- IntelliJ IDEA Plugin: https://github.com/tttsaurus/ksml-intellij-plugin
+
 ## How to use it?
 
 `KSMLCompiler` accepts a GLSL shader, the available KSML source files, and the
@@ -27,7 +30,7 @@ Applications should supply their own shader sources.
 
 ## KSML compiler behavior
 
-The compiler implements the directives in the [KSML v2 specification](https://github.com/CleanroomMC/Kirino-Engine/blob/main/docs/ksml/ksml_spec_v2.md).
+The compiler implements the directives in the [KSML Specification v2.1](https://github.com/CleanroomMC/KSML-Spec/blob/master/ksml_spec_v2.1.md).
 
 Module level version requirement violations produce cyan `notice` diagnostics.
 Function level version requirement violations produce yellow `warning` but not `error` with an explicit crash.

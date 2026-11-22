@@ -24,6 +24,7 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
     private final List<KSMLFileContext> selected;
     private final GLSLPostStrippingContext.Builder builder;
     private final int fileId;
+    private final int lineOffset;
     private final Set<String> imported = new HashSet<>();
     private @Nullable GLVersion version;
     private boolean seenVersion;
@@ -35,13 +36,15 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
             List<KSMLFileContext> contexts,
             List<KSMLFileContext> selected,
             GLSLPostStrippingContext.Builder builder,
-            int fileId) {
+            int fileId,
+            int lineOffset) {
 
         this.rewriter = rewriter;
         this.source = source;
         this.selected = selected;
         this.builder = builder;
         this.fileId = fileId;
+        this.lineOffset = lineOffset;
         contexts.forEach(ctx -> modules.putIfAbsent(ctx.moduleName, ctx));
         version = new GLVersion(110, null);
     }
@@ -114,7 +117,7 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
     @Override
     public void enterExternal_declaration(GLSLParser.External_declarationContext ctx) {
         seenDeclaration = true;
-        rewriter.insertBefore(ctx.start, String.format("\n#line %d %d\n", ctx.start.getLine(), fileId));
+        rewriter.insertBefore(ctx.start, String.format("\n#line %d %d\n", ctx.start.getLine() + lineOffset, fileId));
     }
 
     @Override

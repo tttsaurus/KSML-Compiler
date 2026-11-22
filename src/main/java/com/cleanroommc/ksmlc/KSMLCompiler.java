@@ -6,7 +6,6 @@ import com.cleanroommc.ksmlc.glsl.grammar.KSMLLexer;
 import com.cleanroommc.ksmlc.glsl.grammar.KSMLParser;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.ParseTree;
-import org.antlr.v4.runtime.tree.ParseTreeListener;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.jspecify.annotations.Nullable;
 
@@ -18,6 +17,7 @@ public class KSMLCompiler {
     private final SourceFile glslSource;
     private final SourceFile[] ksmlSources;
     private final String[] features;
+    private final LineDirectiveMode lineDirectiveMode;
 
     private int fileIdCounter = 0;
     private List<SourceFile> lastSources = List.of();
@@ -27,9 +27,19 @@ public class KSMLCompiler {
             SourceFile[] ksmlSources,
             String @Nullable [] features) {
 
+        this(glslSource, ksmlSources, features, LineDirectiveMode.AUTO);
+    }
+
+    public KSMLCompiler(
+            SourceFile glslSource,
+            SourceFile[] ksmlSources,
+            String @Nullable [] features,
+            LineDirectiveMode lineDirectiveMode) {
+
         this.glslSource = Objects.requireNonNull(glslSource, "glslSource");
         this.ksmlSources = Objects.requireNonNull(ksmlSources, "ksmlSources").clone();
         this.features = features == null ? new String[0] : features.clone();
+        this.lineDirectiveMode = Objects.requireNonNull(lineDirectiveMode, "lineDirectiveMode");
     }
 
     public String compile() {
@@ -42,24 +52,60 @@ public class KSMLCompiler {
         var modules = new HashSet<String>();
 
         for (SourceFile input : ksmlSources) {
-            SourceFile source = SourceFile.fromString(input.fileName(), input.source());
-            sources.add(source);
+            sources.add(SourceFile.fromString(input.fileName(), input.source()));
+        }
+        var shader = SourceFile.fromString(glslSource.fileName(), glslSource.source());
+        sources.add(shader);
 
+        var parsedShader = parseSource(
+                shader,
+                GLSLLexer::new,
+                GLSLParser::new,
+                GLSLParser::translation_unit,
+                GeneralErrorListener::new);
+
+        failOnErrors(sources);
+
+        int shaderVersion = 110;
+        for (var directive : parsedShader.tree().compiler_directive()) {
+            var version = directive.version_directive();
+            if (version != null) {
+                var parsedVersion = GLVersion.parse(shader, version.number().getText(),
+                        version.profile() == null ? null : version.profile().getText(),
+                        Utils.spanFromToken(version.start), true);
+                if (parsedVersion != null) {
+                    shaderVersion = parsedVersion.number();
+                }
+                break;
+            }
+        }
+
+        failOnErrors(sources);
+
+        int lineOffset = lineDirectiveMode.lineOffset(shaderVersion);
+
+        for (SourceFile source : sources.subList(0, ksmlSources.length)) {
             var contextBuilder = new KSMLFileContext.Builder(source);
             int fileId = registerFileId(fileIdMap, source.fileName());
-            var stripped = compileSource(
+            var parsed = parseSource(
                     source,
                     KSMLLexer::new,
                     KSMLParser::new,
                     KSMLParser::ksmlTranslationUnit,
-                    GeneralErrorListener::new,
-                    rewriter -> new KSMLRewriteListener(rewriter, source, contextBuilder, fileId, enabledFeatures));
+                    GeneralErrorListener::new);
 
             if (source.reportBuilder().containsError()) {
                 continue;
             }
 
-            var context = contextBuilder.build(stripped);
+            new ParseTreeWalker().walk(new KSMLRewriteListener(parsed.rewriter(), source, contextBuilder,
+                    fileId, enabledFeatures, lineOffset), parsed.tree());
+
+            if (source.reportBuilder().containsError()) {
+                continue;
+            }
+
+            var context = contextBuilder.build(parsed.rewriter().getText());
             if (!modules.add(context.moduleName)) {
                 Utils.error(source, Utils.sourcePosition(source, 1, 0, 1),
                         "Duplicate module \"%s\"", context.moduleName);
@@ -70,19 +116,12 @@ public class KSMLCompiler {
 
         failOnErrors(sources);
 
-        var shader = SourceFile.fromString(glslSource.fileName(), glslSource.source());
-        sources.add(shader);
-
         var selected = new ArrayList<KSMLFileContext>();
         var postBuilder = new GLSLPostStrippingContext.Builder();
         int fileId = registerFileId(fileIdMap, shader.fileName());
-        var strippedGLSL = compileSource(
-                shader,
-                GLSLLexer::new,
-                GLSLParser::new,
-                GLSLParser::translation_unit,
-                GeneralErrorListener::new,
-                rewriter -> new GLSLRewriteListener(rewriter, shader, contexts, selected, postBuilder, fileId));
+        new ParseTreeWalker().walk(new GLSLRewriteListener(parsedShader.rewriter(), shader, contexts,
+                selected, postBuilder, fileId, lineOffset), parsedShader.tree());
+        var strippedGLSL = parsedShader.rewriter().getText();
 
         new KSMLChecker(selected).check();
 
@@ -184,13 +223,12 @@ public class KSMLCompiler {
         return id;
     }
 
-    private <LE extends Lexer, PA extends Parser, EL extends BaseErrorListener, LI extends ParseTreeListener> String compileSource(
+    private <LE extends Lexer, PA extends Parser, EL extends BaseErrorListener, T extends ParseTree> ParsedSource<T> parseSource(
             SourceFile source,
             Function<CharStream, LE> lexerCtor,
             Function<TokenStream, PA> parserCtor,
-            Function<PA, ParseTree> topRuleApplier,
-            Function<SourceFile, EL> errorListener,
-            Function<TokenStreamRewriter, LI> listenerCtor) {
+            Function<PA, T> topRuleApplier,
+            Function<SourceFile, EL> errorListener) {
 
         CharStream sourceStream = new ANTLRInputStream(source.source().toCharArray(), source.source().length());
         LE lexer = lexerCtor.apply(sourceStream);
@@ -200,13 +238,10 @@ public class KSMLCompiler {
         lexer.addErrorListener(errorListener.apply(source));
         parser.removeErrorListeners();
         parser.addErrorListener(errorListener.apply(source));
-        ParseTree parseTree = topRuleApplier.apply(parser);
-        if (source.reportBuilder().containsError()) {
-            return "";
-        }
-        TokenStreamRewriter rewriter = new TokenStreamRewriter(tokenStream);
-        ParseTreeWalker walker = new ParseTreeWalker();
-        walker.walk(listenerCtor.apply(rewriter), parseTree);
-        return rewriter.getText();
+        T parseTree = topRuleApplier.apply(parser);
+        return new ParsedSource<>(new TokenStreamRewriter(tokenStream), parseTree);
+    }
+
+    private record ParsedSource<T extends ParseTree>(TokenStreamRewriter rewriter, T tree) {
     }
 }

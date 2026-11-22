@@ -20,6 +20,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
     private final KSMLFileContext.Builder builder;
     private final int fileId;
     private final Set<String> features;
+    private final int lineOffset;
     private final Set<String> localFunctions = new HashSet<>();
     private final Set<String> dependencies = new HashSet<>();
     private @Nullable String moduleName;
@@ -33,13 +34,15 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
             SourceFile source,
             KSMLFileContext.Builder builder,
             int fileId,
-            Set<String> features) {
+            Set<String> features,
+            int lineOffset) {
 
         this.rewriter = rewriter;
         this.source = source;
         this.builder = builder;
         this.fileId = fileId;
         this.features = features;
+        this.lineOffset = lineOffset;
     }
 
     private boolean isEnabled(KsmlDeclarationContext declaration) {
@@ -168,7 +171,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
 
         rewriter.replace(prototype.IDENTIFIER().getSymbol(), Utils.synthesizeModuleMemberName(moduleName, name));
         builder.addDeclarationPrototype(rewriter.getText(Interval.of(prototype.start.getTokenIndex(), prototype.stop.getTokenIndex())));
-        rewriter.insertBefore(ctx.start, String.format("\n#line %d %d\n", ctx.start.getLine(), fileId));
+        rewriter.insertBefore(ctx.start, String.format("\n#line %d %d\n", ctx.start.getLine() + lineOffset, fileId));
     }
 
     private void addExportedWrapper(Function_prototypeContext prototype) {
@@ -208,7 +211,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
         String signature = wrapper.getText(Interval.of(prototype.start.getTokenIndex(), prototype.stop.getTokenIndex()));
 
         builder.addExportedWrapper(String.format("#line %d %d\n%s { %s%s(%s); }\n",
-                prototype.start.getLine(),
+                prototype.start.getLine() + lineOffset,
                 fileId,
                 signature,
                 returnsVoid ? "" : "return ",
