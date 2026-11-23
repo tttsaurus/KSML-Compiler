@@ -5,7 +5,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.Set;
 
-public record GLVersion(int number, @Nullable String profile) implements Comparable<GLVersion> {
+public record GLVersion(int number, @Nullable String profile) {
 
     private static final Set<Integer> VERSIONS = Set.of(
             110,
@@ -71,10 +71,11 @@ public record GLVersion(int number, @Nullable String profile) implements Compara
         return new GLVersion(version, normalizeProfile(profile == null ? "core" : profile));
     }
 
-    @Override
-    public int compareTo(GLVersion other) {
-        int versions = Integer.compare(number, other.number);
-        return versions != 0 ? versions : Boolean.compare("compat".equals(profile), "compat".equals(other.profile));
+    public boolean satisfies(GLVersion required) {
+        return number >= required.number
+                && (number < 150 || required.number < 150
+                || "core".equals(required.profile)
+                || "compat".equals(profile) || "compatibility".equals(profile));
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.cleanroommc.ksmlc;
 import com.cleanroommc.ksmlc.glsl.grammar.GLSLParser;
 import com.cleanroommc.ksmlc.glsl.grammar.GLSLParserBaseListener;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +27,8 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
     private final int fileId;
     private final int lineOffset;
     private final Set<String> imported = new HashSet<>();
+    private final Set<String> nativeNames = new HashSet<>();
+    private final List<KSMLFileContext.UnqualifiedFunctionCall> unqualifiedFunctionCalls = new ArrayList<>();
     private @Nullable GLVersion version;
     private boolean seenVersion;
     private boolean seenDeclaration;
@@ -59,7 +62,10 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
             }
 
             String name = matcher.group(1);
-            imported.add(name);
+            if (!imported.add(name)) {
+                Utils.error(source, Utils.spanFromToken(meta.start), "Duplicate import of module \"%s\"", name);
+                continue;
+            }
             var target = modules.get(name);
             if (target == null) {
                 Utils.error(source, Utils.spanFromToken(meta.start), "Unresolved imported module \"%s\"", name);
@@ -122,10 +128,11 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
 
     @Override
     public void exitTranslation_unit(GLSLParser.Translation_unitContext ctx) {
+        KSMLChecker.checkUnqualifiedCalls(source, unqualifiedFunctionCalls, selected, nativeNames);
         for (var module : selected) {
             var required = GLVersion.parse(module.sourceFile, module.glVersion, module.glProfile,
                     Utils.sourcePosition(module.sourceFile, 1, 0, 1), false);
-            if (version != null && required != null && version.compareTo(required) < 0) {
+            if (version != null && required != null && !version.satisfies(required)) {
                 var introducer = introducedBy.get(module.moduleName);
                 String importHint = !imported.contains(module.moduleName) && introducer != null
                         ? String.format(" (indirect import. introduced by \"%s\")", introducer)
@@ -138,7 +145,35 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
     }
 
     @Override
+    public void enterFunction_prototype(GLSLParser.Function_prototypeContext ctx) {
+        nativeNames.add(ctx.IDENTIFIER().getText());
+    }
+
+    @Override
+    public void enterStruct_specifier(GLSLParser.Struct_specifierContext ctx) {
+        if (ctx.IDENTIFIER() != null) {
+            nativeNames.add(ctx.IDENTIFIER().getText());
+        }
+    }
+
+    @Override
+    public void enterTypeConstructor(GLSLParser.TypeConstructorContext ctx) {
+        var type = ctx.type_specifier().type_specifier_nonarray().type_name();
+        if (type != null) {
+            unqualifiedFunctionCalls.add(new KSMLFileContext.UnqualifiedFunctionCall(type.getText(),
+                    Utils.spanFromToken(type.IDENTIFIER().getSymbol())));
+        }
+    }
+
+    @Override
     public void enterFunctionCall(GLSLParser.FunctionCallContext ctx) {
+        if (ctx.postfix_expression() instanceof GLSLParser.PrimaryContext primary
+                && primary.primary_expression().variable_identifier() != null) {
+            var name = primary.primary_expression().variable_identifier().IDENTIFIER().getSymbol();
+            unqualifiedFunctionCalls.add(new KSMLFileContext.UnqualifiedFunctionCall(name.getText(), Utils.spanFromToken(name)));
+            return;
+        }
+
         if (!(ctx.postfix_expression() instanceof GLSLParser.MemberAccessContext member)
                 || !(member.postfix_expression() instanceof GLSLParser.PrimaryContext primary)
                 || (primary.primary_expression().variable_identifier() == null

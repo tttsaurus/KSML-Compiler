@@ -8,7 +8,6 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.TokenStreamRewriter;
 import org.antlr.v4.runtime.misc.Interval;
 import org.jspecify.annotations.Nullable;
@@ -21,8 +20,9 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
     private final int fileId;
     private final Set<String> features;
     private final int lineOffset;
-    private final Set<String> localFunctions = new HashSet<>();
+    private final Set<String> structNames = new HashSet<>();
     private final Set<String> dependencies = new HashSet<>();
+    private int lastRequiresLine = -1;
     private @Nullable String moduleName;
     private @Nullable GLVersion moduleVersion;
     private @Nullable GLVersion functionVersion;
@@ -51,17 +51,6 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
 
     @Override
     public void enterKsmlTranslationUnit(KsmlTranslationUnitContext ctx) {
-        for (var declaration : ctx.ksmlDeclaration()) {
-            if (isEnabled(declaration)) {
-                localFunctions.add(declaration
-                        .codeBlock()
-                        .function_definition()
-                        .function_prototype()
-                        .IDENTIFIER()
-                        .getText());
-            }
-        }
-
         if (ctx.glVersionMeta().size() != 1) {
             Utils.error(source, Utils.spanFromToken(ctx.moduleMeta().start),
                     "A module must declare exactly one \"@gl_version\"");
@@ -77,8 +66,16 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
 
     @Override
     public void enterRequiresMeta(RequiresMetaContext ctx) {
-        builder.addRequiredModule(ctx.IDENTIFIER().getText(), Utils.spanFromToken(ctx.IDENTIFIER().getSymbol()));
-        dependencies.add(ctx.IDENTIFIER().getText());
+        String name = ctx.IDENTIFIER().getText();
+        if (ctx.start.getLine() == lastRequiresLine) {
+            Utils.error(source, Utils.spanFromToken(ctx.start), "\"@requires\" declarations must appear on separate lines");
+        }
+        lastRequiresLine = ctx.stop.getLine();
+        if (!dependencies.add(name)) {
+            Utils.error(source, Utils.spanFromToken(ctx.IDENTIFIER().getSymbol()), "Duplicate requirement of module \"%s\"", name);
+        } else {
+            builder.addRequiredModule(name, Utils.spanFromToken(ctx.IDENTIFIER().getSymbol()));
+        }
         deleteTokens(ctx.start, ctx.stop);
     }
 
@@ -95,6 +92,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
         enabled = isEnabled(ctx);
         exported = false;
         functionVersion = moduleVersion;
+        structNames.clear();
         if (!enabled) {
             deleteTokens(ctx.start, ctx.stop);
             return;
@@ -148,7 +146,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
                     name,
                     name,
                     functionVersion == null ? null : Integer.toString(functionVersion.number()),
-                    KSMLFileContext.ExportTargetType.Function);
+                    KSMLFileContext.ExportTargetType.FUNCTION);
         }
 
         int count = prototype.function_parameters() == null
@@ -219,23 +217,18 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
                 String.join(", ", arguments)));
     }
 
-    private void rewriteLocal(Token name, int count) {
-        if (!enabled || !localFunctions.contains(name.getText())) {
-            return;
+    @Override
+    public void enterStruct_specifier(Struct_specifierContext ctx) {
+        if (enabled && ctx.IDENTIFIER() != null) {
+            structNames.add(ctx.IDENTIFIER().getText());
         }
-
-        String moduleName = Objects.requireNonNull(this.moduleName, "moduleName");
-        builder.addModuleMemberReference(moduleName, name.getText(), Utils.spanFromToken(name), functionVersion, count);
-        rewriter.replace(name, Utils.synthesizeModuleMemberName(moduleName, name.getText()));
     }
 
     @Override
     public void enterTypeConstructor(TypeConstructorContext ctx) {
         var type = ctx.type_specifier().type_specifier_nonarray().type_name();
-        if (type != null) {
-            var parameters = ctx.function_call_parameters();
-            int count = parameters == null || parameters.VOID() != null ? 0 : parameters.assignment_expression().size();
-            rewriteLocal(type.IDENTIFIER().getSymbol(), count);
+        if (enabled && type != null && !structNames.contains(type.getText())) {
+            builder.addUnqualifiedFunctionCall(type.getText(), Utils.spanFromToken(type.IDENTIFIER().getSymbol()));
         }
     }
 
@@ -248,7 +241,10 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
         var parameters = ctx.function_call_parameters();
         int count = parameters == null || parameters.VOID() != null ? 0 : parameters.assignment_expression().size();
         if (ctx.postfix_expression() instanceof PrimaryContext primary && primary.primary_expression().variable_identifier() != null) {
-            rewriteLocal(primary.primary_expression().variable_identifier().IDENTIFIER().getSymbol(), count);
+            var name = primary.primary_expression().variable_identifier().IDENTIFIER().getSymbol();
+            if (!structNames.contains(name.getText())) {
+                builder.addUnqualifiedFunctionCall(name.getText(), Utils.spanFromToken(name));
+            }
         } else if (ctx.postfix_expression() instanceof MemberAccessContext member
                 && member.postfix_expression() instanceof PrimaryContext primary
                 && (primary.primary_expression().variable_identifier() != null

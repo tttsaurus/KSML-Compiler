@@ -12,6 +12,36 @@ import java.util.Objects;
 
 public class KSMLFileContext {
 
+    public record Exportable(
+            String globalVisibleName,
+            String ksmlVisibleName,
+            @Nullable String version,
+            ExportTargetType targetType) {
+    }
+
+    public enum ExportTargetType {
+        FUNCTION
+    }
+
+    public record FunctionInfo(
+            String name,
+            int parameterCount,
+            boolean exported,
+            @Nullable GLVersion version,
+            AbstractSpan span) {
+    }
+
+    public record ModuleMemberReference(
+            String module,
+            String memberName,
+            AbstractSpan span,
+            @Nullable GLVersion callerVersion,
+            int argumentCount) {
+    }
+
+    public record UnqualifiedFunctionCall(String name, AbstractSpan span) {
+    }
+
     public final SourceFile sourceFile;
     public final FileReportBuilder fileReportBuilder;
     // Per file context
@@ -27,6 +57,7 @@ public class KSMLFileContext {
     // Non-visible context
     public final List<String> declarationPrototypes;
     public final List<ModuleMemberReference> moduleMemberReferences;
+    public final List<UnqualifiedFunctionCall> unqualifiedFunctionCalls;
     public final List<FunctionInfo> functions;
     public final List<String> exportedWrappers;
     public final String strippedSource;
@@ -42,6 +73,7 @@ public class KSMLFileContext {
             final HashMap<String, Exportable> exported,
             final List<String> declarationPrototypes,
             final List<ModuleMemberReference> moduleMemberReferences,
+            final List<UnqualifiedFunctionCall> unqualifiedFunctionCalls,
             final List<FunctionInfo> functions,
             final List<String> exportedWrappers,
             final String strippedSource) {
@@ -57,6 +89,7 @@ public class KSMLFileContext {
         this.exported = exported;
         this.declarationPrototypes = declarationPrototypes;
         this.moduleMemberReferences = moduleMemberReferences;
+        this.unqualifiedFunctionCalls = List.copyOf(unqualifiedFunctionCalls);
         this.functions = List.copyOf(functions);
         this.exportedWrappers = List.copyOf(exportedWrappers);
         this.strippedSource = strippedSource;
@@ -74,6 +107,7 @@ public class KSMLFileContext {
         private final HashMap<String, Exportable> exported = new HashMap<>();
         private final List<String> declarationPrototypes = new ArrayList<>();
         private final List<ModuleMemberReference> moduleMemberReferences = new ArrayList<>();
+        private final List<UnqualifiedFunctionCall> unqualifiedFunctionCalls = new ArrayList<>();
         private final List<FunctionInfo> functions = new ArrayList<>();
         private final List<String> exportedWrappers = new ArrayList<>();
 
@@ -130,6 +164,10 @@ public class KSMLFileContext {
             functions.add(function);
         }
 
+        public void addUnqualifiedFunctionCall(String name, AbstractSpan span) {
+            unqualifiedFunctionCalls.add(new UnqualifiedFunctionCall(name, span));
+        }
+
         public void addExportedWrapper(String wrapper) {
             exportedWrappers.add(wrapper);
         }
@@ -146,36 +184,10 @@ public class KSMLFileContext {
                     exported,
                     declarationPrototypes,
                     moduleMemberReferences,
+                    unqualifiedFunctionCalls,
                     functions,
                     exportedWrappers,
                     strippedSource);
         }
-    }
-
-    public record Exportable(
-            String globalVisibleName,
-            String ksmlVisibleName,
-            @Nullable String version,
-            ExportTargetType targetType) {
-    }
-
-    public enum ExportTargetType {
-        Function
-    }
-
-    public record FunctionInfo(
-            String name,
-            int parameterCount,
-            boolean exported,
-            @Nullable GLVersion version,
-            AbstractSpan span) {
-    }
-
-    public record ModuleMemberReference(
-            String module,
-            String memberName,
-            AbstractSpan span,
-            @Nullable GLVersion callerVersion,
-            int argumentCount) {
     }
 }
