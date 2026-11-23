@@ -9,6 +9,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.jspecify.annotations.Nullable;
 
+import java.io.PrintStream;
 import java.util.*;
 import java.util.function.Function;
 
@@ -19,7 +20,6 @@ public class KSMLCompiler {
     private final String[] features;
     private final LineDirectiveMode lineDirectiveMode;
 
-    private int fileIdCounter = 0;
     private List<SourceFile> lastSources = List.of();
 
     public KSMLCompiler(
@@ -43,8 +43,11 @@ public class KSMLCompiler {
     }
 
     public String compile() {
-        fileIdCounter = 0;
-        var fileIdMap = new TreeMap<String, Integer>();
+        return compile(System.err, true);
+    }
+
+    public String compile(PrintStream diagnosticStream, boolean enableColor) {
+        Objects.requireNonNull(diagnosticStream, "diagnosticStream");
         var contexts = new ArrayList<KSMLFileContext>(ksmlSources.length);
         var sources = new ArrayList<SourceFile>();
         lastSources = Collections.unmodifiableList(sources);
@@ -64,7 +67,7 @@ public class KSMLCompiler {
                 GLSLParser::translation_unit,
                 GeneralErrorListener::new);
 
-        failOnErrors(sources);
+        failOnErrors(sources, diagnosticStream, enableColor);
 
         int shaderVersion = 110;
         for (var directive : parsedShader.tree().compiler_directive()) {
@@ -80,13 +83,13 @@ public class KSMLCompiler {
             }
         }
 
-        failOnErrors(sources);
+        failOnErrors(sources, diagnosticStream, enableColor);
 
         int lineOffset = lineDirectiveMode.lineOffset(shaderVersion);
 
-        for (SourceFile source : sources.subList(0, ksmlSources.length)) {
+        for (int fileId = 0; fileId < ksmlSources.length; fileId++) {
+            SourceFile source = sources.get(fileId);
             var contextBuilder = new KSMLFileContext.Builder(source);
-            int fileId = registerFileId(fileIdMap, source.fileName());
             var parsed = parseSource(
                     source,
                     KSMLLexer::new,
@@ -114,24 +117,23 @@ public class KSMLCompiler {
             contexts.add(context);
         }
 
-        failOnErrors(sources);
+        failOnErrors(sources, diagnosticStream, enableColor);
 
         var selected = new ArrayList<KSMLFileContext>();
         var postBuilder = new GLSLPostStrippingContext.Builder();
-        int fileId = registerFileId(fileIdMap, shader.fileName());
         new ParseTreeWalker().walk(new GLSLRewriteListener(parsedShader.rewriter(), shader, contexts,
-                selected, postBuilder, fileId, lineOffset), parsedShader.tree());
+                selected, postBuilder, ksmlSources.length, lineOffset), parsedShader.tree());
         var strippedGLSL = parsedShader.rewriter().getText();
 
         new KSMLChecker(selected).check();
 
-        failOnErrors(sources);
+        failOnErrors(sources, diagnosticStream, enableColor);
 
-        sources.forEach(source -> source.printDiagnostics(System.err, true));
+        sources.forEach(source -> source.printDiagnostics(diagnosticStream, enableColor));
 
         var result = new StringBuilder();
         assembleGLSLVersion(postBuilder.build(), result);
-        injectFileIdMappingComment(fileIdMap, result);
+        injectFileIdMappingComment(sources, result);
         assembleKSMLModuleHeaders(selected, result);
         assembleKSMLModuleBodies(selected, result);
         assembleKSMLExportedStubs(selected, result);
@@ -144,18 +146,23 @@ public class KSMLCompiler {
         return lastSources;
     }
 
-    private void failOnErrors(List<SourceFile> sources) {
+    private void failOnErrors(List<SourceFile> sources, PrintStream diagnosticStream, boolean enableColor) {
         if (sources.stream().anyMatch(source -> source.reportBuilder().containsError())) {
-            sources.forEach(source -> source.printDiagnostics(System.err, true));
+            sources.forEach(source -> source.printDiagnostics(diagnosticStream, enableColor));
             throw new KSMLCompilationException(sources);
         }
     }
 
-    private void injectFileIdMappingComment(final Map<String, Integer> fileIdMap, final StringBuilder builder) {
+    private void injectFileIdMappingComment(final List<SourceFile> sources, final StringBuilder builder) {
+        var fileIds = new ArrayList<Integer>(sources.size());
+        for (int id = 0; id < sources.size(); id++) {
+            fileIds.add(id);
+        }
+        fileIds.sort(Comparator.comparing((Integer id) -> sources.get(id).fileName()).thenComparingInt(Integer::intValue));
         builder.append("/* File Mapping:\n");
-        fileIdMap.forEach((key, value) -> {
-            builder.append(String.format(" * %s <-> %d\n", key, value));
-        });
+        for (int id : fileIds) {
+            builder.append(String.format(" * %s <-> %d\n", sources.get(id).fileName(), id));
+        }
         builder.append(" */\n");
     }
 
@@ -213,14 +220,6 @@ public class KSMLCompiler {
                 builder.append(stub).append('\n');
             }
         }
-    }
-
-    private int registerFileId(Map<String, Integer> fileIdMap, String filePath) {
-        var id = fileIdMap.get(filePath);
-        if (id == null) {
-            fileIdMap.put(filePath, id = fileIdCounter++);
-        }
-        return id;
     }
 
     private <LE extends Lexer, PA extends Parser, EL extends BaseErrorListener, T extends ParseTree> ParsedSource<T> parseSource(

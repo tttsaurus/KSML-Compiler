@@ -1,16 +1,19 @@
 package com.cleanroommc.ksmlc;
 
+import chaos.unity.nenggao.AbstractSpan;
 import com.cleanroommc.ksmlc.glsl.grammar.GLSLParser;
 import com.cleanroommc.ksmlc.glsl.grammar.GLSLParserBaseListener;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.TokenStreamRewriter;
 import org.antlr.v4.runtime.misc.Interval;
 import org.jspecify.annotations.Nullable;
@@ -22,12 +25,14 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
     private final SourceFile source;
     private final Map<String, KSMLFileContext> modules = new LinkedHashMap<>();
     private final Map<String, String> introducedBy = new LinkedHashMap<>();
+    private final Map<String, AbstractSpan> importOrigins = new LinkedHashMap<>();
     private final List<KSMLFileContext> selected;
     private final GLSLPostStrippingContext.Builder builder;
     private final int fileId;
     private final int lineOffset;
     private final Set<String> imported = new HashSet<>();
     private final Set<String> nativeNames = new HashSet<>();
+    private final Map<ParserRuleContext, Set<String>> structNames = new IdentityHashMap<>();
     private final List<KSMLFileContext.UnqualifiedFunctionCall> unqualifiedFunctionCalls = new ArrayList<>();
     private @Nullable GLVersion version;
     private boolean seenVersion;
@@ -66,21 +71,24 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
                 Utils.error(source, Utils.spanFromToken(meta.start), "Duplicate import of module \"%s\"", name);
                 continue;
             }
+            var importSpan = Utils.spanFromToken(meta.start);
+            importOrigins.put(name, importSpan);
             var target = modules.get(name);
             if (target == null) {
                 Utils.error(source, Utils.spanFromToken(meta.start), "Unresolved imported module \"%s\"", name);
             } else {
-                select(target, new HashSet<>());
+                select(target, importSpan);
             }
         }
     }
 
-    private void select(KSMLFileContext ctx, Set<String> visited) {
-        if (!visited.add(ctx.moduleName) || selected.contains(ctx)) {
+    private void select(KSMLFileContext ctx, AbstractSpan importSpan) {
+        if (selected.contains(ctx)) {
             return;
         }
 
         selected.add(ctx);
+        importOrigins.putIfAbsent(ctx.moduleName, importSpan);
         for (String dependency : ctx.requiredModules) {
             var target = modules.get(dependency);
             if (target == null) {
@@ -88,7 +96,7 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
                         Utils.sourcePosition(ctx.sourceFile, 1, 0, 1)), "Unresolved required module \"%s\"", dependency);
             } else {
                 introducedBy.putIfAbsent(dependency, ctx.moduleName);
-                select(target, visited);
+                select(target, importSpan);
             }
         }
     }
@@ -137,7 +145,7 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
                 String importHint = !imported.contains(module.moduleName) && introducer != null
                         ? String.format(" (indirect import. introduced by \"%s\")", introducer)
                         : "";
-                Utils.notice(source, Utils.spanFromToken(ctx.start),
+                Utils.notice(source, importOrigins.getOrDefault(module.moduleName, Utils.spanFromToken(ctx.start)),
                         "Module \"%s\" requires %s, but shader \"%s\" provides %s%s",
                         module.moduleName, required, source.fileName(), version, importHint);
             }
@@ -152,14 +160,23 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
     @Override
     public void enterStruct_specifier(GLSLParser.Struct_specifierContext ctx) {
         if (ctx.IDENTIFIER() != null) {
-            nativeNames.add(ctx.IDENTIFIER().getText());
+            ParserRuleContext scope = ctx;
+            while (scope.getParent() != null
+                    && !(scope instanceof GLSLParser.Compound_statementContext)
+                    && !(scope instanceof GLSLParser.Compound_statement_no_new_scopeContext)
+                    && !(scope instanceof GLSLParser.Iteration_statementContext)
+                    && !(scope instanceof GLSLParser.Switch_statementContext)
+                    && !(scope instanceof GLSLParser.StatementContext && scope.getParent() instanceof GLSLParser.Selection_rest_statementContext)) {
+                scope = scope.getParent();
+            }
+            structNames.computeIfAbsent(scope, key -> new HashSet<>()).add(ctx.IDENTIFIER().getText());
         }
     }
 
     @Override
     public void enterTypeConstructor(GLSLParser.TypeConstructorContext ctx) {
         var type = ctx.type_specifier().type_specifier_nonarray().type_name();
-        if (type != null) {
+        if (type != null && !Utils.nameVisible(ctx, structNames, type.getText())) {
             unqualifiedFunctionCalls.add(new KSMLFileContext.UnqualifiedFunctionCall(type.getText(),
                     Utils.spanFromToken(type.IDENTIFIER().getSymbol())));
         }
@@ -170,7 +187,9 @@ public class GLSLRewriteListener extends GLSLParserBaseListener implements Rewri
         if (ctx.postfix_expression() instanceof GLSLParser.PrimaryContext primary
                 && primary.primary_expression().variable_identifier() != null) {
             var name = primary.primary_expression().variable_identifier().IDENTIFIER().getSymbol();
-            unqualifiedFunctionCalls.add(new KSMLFileContext.UnqualifiedFunctionCall(name.getText(), Utils.spanFromToken(name)));
+            if (!Utils.nameVisible(ctx, structNames, name.getText())) {
+                unqualifiedFunctionCalls.add(new KSMLFileContext.UnqualifiedFunctionCall(name.getText(), Utils.spanFromToken(name)));
+            }
             return;
         }
 

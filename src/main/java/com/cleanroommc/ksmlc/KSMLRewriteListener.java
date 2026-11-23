@@ -5,9 +5,12 @@ import com.cleanroommc.ksmlc.glsl.grammar.KSMLParserBaseListener;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.TokenStreamRewriter;
 import org.antlr.v4.runtime.misc.Interval;
 import org.jspecify.annotations.Nullable;
@@ -20,7 +23,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
     private final int fileId;
     private final Set<String> features;
     private final int lineOffset;
-    private final Set<String> structNames = new HashSet<>();
+    private final Map<ParserRuleContext, Set<String>> structNames = new IdentityHashMap<>();
     private final Set<String> dependencies = new HashSet<>();
     private int lastRequiresLine = -1;
     private @Nullable String moduleName;
@@ -220,14 +223,23 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
     @Override
     public void enterStruct_specifier(Struct_specifierContext ctx) {
         if (enabled && ctx.IDENTIFIER() != null) {
-            structNames.add(ctx.IDENTIFIER().getText());
+            ParserRuleContext scope = ctx;
+            while (scope.getParent() != null
+                    && !(scope instanceof Compound_statementContext)
+                    && !(scope instanceof Compound_statement_no_new_scopeContext)
+                    && !(scope instanceof Iteration_statementContext)
+                    && !(scope instanceof Switch_statementContext)
+                    && !(scope instanceof StatementContext && scope.getParent() instanceof Selection_rest_statementContext)) {
+                scope = scope.getParent();
+            }
+            structNames.computeIfAbsent(scope, key -> new HashSet<>()).add(ctx.IDENTIFIER().getText());
         }
     }
 
     @Override
     public void enterTypeConstructor(TypeConstructorContext ctx) {
         var type = ctx.type_specifier().type_specifier_nonarray().type_name();
-        if (enabled && type != null && !structNames.contains(type.getText())) {
+        if (enabled && type != null && !Utils.nameVisible(ctx, structNames, type.getText())) {
             builder.addUnqualifiedFunctionCall(type.getText(), Utils.spanFromToken(type.IDENTIFIER().getSymbol()));
         }
     }
@@ -242,7 +254,7 @@ public class KSMLRewriteListener extends KSMLParserBaseListener implements Rewri
         int count = parameters == null || parameters.VOID() != null ? 0 : parameters.assignment_expression().size();
         if (ctx.postfix_expression() instanceof PrimaryContext primary && primary.primary_expression().variable_identifier() != null) {
             var name = primary.primary_expression().variable_identifier().IDENTIFIER().getSymbol();
-            if (!structNames.contains(name.getText())) {
+            if (!Utils.nameVisible(ctx, structNames, name.getText())) {
                 builder.addUnqualifiedFunctionCall(name.getText(), Utils.spanFromToken(name));
             }
         } else if (ctx.postfix_expression() instanceof MemberAccessContext member

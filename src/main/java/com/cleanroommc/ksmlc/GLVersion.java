@@ -22,6 +22,19 @@ public record GLVersion(int number, @Nullable String profile) {
             450,
             460);
 
+    public GLVersion {
+        if (!VERSIONS.contains(number)) {
+            throw new IllegalArgumentException("Unsupported GLSL version: \"" + number + "\"");
+        }
+        if (number < 150) {
+            if (profile != null) {
+                throw new IllegalArgumentException("Profiles require GL150 or later");
+            }
+        } else {
+            profile = normalizeProfile(profile == null ? "core" : profile);
+        }
+    }
+
     public static String normalizeProfile(String profile) {
         if ("core".equals(profile)) {
             return "core";

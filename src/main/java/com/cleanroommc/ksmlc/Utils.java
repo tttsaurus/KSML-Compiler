@@ -2,8 +2,12 @@ package com.cleanroommc.ksmlc;
 
 import chaos.unity.nenggao.AbstractSpan;
 import com.diogonunes.jcolor.Attribute;
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.jspecify.annotations.Nullable;
+
+import java.util.Map;
+import java.util.Set;
 
 public final class Utils {
 
@@ -61,5 +65,15 @@ public final class Utils {
                 line,
                 column,
                 Math.min(lines[line - 1].length(), column + Math.max(0, length)));
+    }
+
+    static boolean nameVisible(ParserRuleContext ctx, Map<ParserRuleContext, Set<String>> declarations, String name) {
+        for (ParserRuleContext scope = ctx; scope != null; scope = scope.getParent()) {
+            var names = declarations.get(scope);
+            if (names != null && names.contains(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
